@@ -27,6 +27,8 @@ class FlashToolGUI:
         # Khởi tạo tooltips
         self.tooltips = {}
 
+        self.lock_chip_var = tk.BooleanVar(value=True)  # Default checked
+
         # File selection frame
         file_frame = ttk.LabelFrame(root, text="File Selection")
         file_frame.pack(fill="x", padx=5, pady=5)
@@ -58,10 +60,22 @@ class FlashToolGUI:
         btn_frame = ttk.Frame(root)
         btn_frame.pack(fill="x", padx=5, pady=5)
         
-        # Left side buttons
-        ttk.Button(btn_frame, text="Flash", command=self.flash_microcontroller).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Erase", command=self.erase_microcontroller).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Reset", command=self.reset_microcontroller).pack(side="left", padx=5)
+        # Add lock chip checkbox
+        lock_chk = tk.Checkbutton(btn_frame, text="Lock chip", variable=self.lock_chip_var)
+        lock_chk.pack(side="right", padx=5)
+        
+        # Left side buttons 
+        self.flash_btn = ttk.Button(btn_frame, text="Flash", command=self.flash_microcontroller)
+        self.flash_btn.pack(side="left", padx=5)
+        self.flash_btn["state"] = "disabled"
+        
+        self.erase_btn = ttk.Button(btn_frame, text="Erase", command=self.erase_microcontroller) 
+        self.erase_btn.pack(side="left", padx=5)
+        self.erase_btn["state"] = "disabled"
+        
+        self.reset_btn = ttk.Button(btn_frame, text="Reset", command=self.reset_microcontroller)
+        self.reset_btn.pack(side="left", padx=5)
+        self.reset_btn["state"] = "disabled"
         
         # Fixed width spacer to create consistent spacing
         spacer = ttk.Frame(btn_frame, width=5)  # Width matches padx of other buttons
@@ -69,7 +83,10 @@ class FlashToolGUI:
         spacer.pack_propagate(False)  # Prevent the frame from shrinking
         
         # Right side buttons
-        ttk.Button(btn_frame, text="Save & Flash", command=self.save_and_flash).pack(side="left", padx=5)
+        self.save_flash_btn = ttk.Button(btn_frame, text="Save & Flash", command=self.save_and_flash)
+        self.save_flash_btn.pack(side="left", padx=5)
+        self.save_flash_btn["state"] = "disabled"
+        
         ttk.Button(btn_frame, text="Connect", command=self.connect_device).pack(side="left", padx=5)
 
         # EEPROM data frames
@@ -96,10 +113,10 @@ class FlashToolGUI:
         self.add_entry_field(left_frame, row_left, "Chạy lạnh OP :", 1, is_uint16=True, default="5", align="w", min_val=1, max_val=999,
                             tooltip="Thời gian chạy lạnh OP (1-999)")
         row_left += 1
-        self.add_entry_field(left_frame, row_left, "Xả đá CL :", 1, is_uint16=True, default="200", align="w", min_val=1, max_val=200,
+        self.add_entry_field(left_frame, row_left, "Xả đá CL :", 1, is_uint16=True, default="60", align="w", min_val=1, max_val=200,
                             tooltip="Thời gian xả đá CL (1-200)")
         row_left += 1
-        self.add_entry_field(left_frame, row_left, "Xả đá OP :", 1, is_uint16=True, default="60", align="w", min_val=1, max_val=60,
+        self.add_entry_field(left_frame, row_left, "Xả đá OP :", 1, is_uint16=True, default="6", align="w", min_val=1, max_val=60,
                             tooltip="Thời gian xả đá OP (1-60)")
         row_left += 1
 
@@ -112,16 +129,16 @@ class FlashToolGUI:
         row_left += 1
 
         # 3. Mode settings
-        self.add_entry_field(right_frame, row_right, "Mode DF :", 1, is_combo=True, values=["OFF", "ON"], default="OFF", align="w",
+        self.add_entry_field(right_frame, row_right, "Mode DF :", 1, is_combo=True, values=["OFF", "ON"], default="ON", align="w",
                             tooltip="ON/OFF: Bật/tắt điều khiển kéo theo Relay 3")
         row_right += 1
         self.add_entry_field(right_frame, row_right, "Mode END :", 1, is_combo=True, values=["OFF", "ON"], default="ON", align="w",
                             tooltip="ON/OFF: Bật tắt Relay 3 tại end OP chạy lạnh")
         row_right += 1
-        self.add_entry_field(right_frame, row_right, "Mode chạy lạnh :", 1, is_combo=True, values=["CL", "OP"], default="CL", align="w",
+        self.add_entry_field(right_frame, row_right, "Mode chạy lạnh :", 1, is_combo=True, values=["CL", "OP"], default="OP", align="w",
                             tooltip="CL: Mặc định CL, OP: Mặc định OP")
         row_right += 1
-        self.add_entry_field(right_frame, row_right, "Mode xả đá :", 1, is_combo=True, values=["CL", "OP"], default="CL", align="w",
+        self.add_entry_field(right_frame, row_right, "Mode xả đá :", 1, is_combo=True, values=["CL", "OP"], default="OP", align="w",
                             tooltip="CL: Xả đá theo CL, OP: Xả đá theo OP")
         row_right += 1
         self.add_entry_field(right_frame, row_right, "Mode SL :", 1, is_combo=True, values=["LCD", "LED"], default="LCD", align="w",
@@ -141,14 +158,21 @@ class FlashToolGUI:
         self.add_entry_field(right_frame, row_right, "Mode HCF :", 1, is_combo=True, values=["CF", "H"], default="CF", align="w",
                             tooltip="CF: Mode Cold Fast, H: Mode Hot")
         row_right += 1
-        self.add_entry_field(right_frame, row_right, "On time Mode LED :", 1, is_combo=True, values=["1", "2"], default="1", align="w",
-                            tooltip="1: Mode LED 1, 2: Mode LED 2")
+        self.add_entry_field(right_frame, row_right, "On time Mode LED :", 1, is_combo=True, 
+                           values=["R1:1 R2:1", "R1:2 R2:1", "R1:1 R2:2", "R1:2 R2:2"], 
+                           default="R1:1 R2:1", align="w",
+                           tooltip="Chọn số lần nhấp nháy LED")
         row_right += 1
         self.add_entry_field(right_frame, row_right, "Touch Num :", 1, is_combo=True, values=["1", "2"], default="1", align="w",
                             tooltip="1: Chạm 1 lần, 2: Chạm 2 lần")
         row_right += 1
         self.add_entry_field(left_frame, row_left, "Try time :", 1, is_uint16=True, default="1", align="w", min_val=1, max_val=999, has_unit_toggle=True,
                             tooltip="Thời gian thử (1-999 giờ/ngày)")
+        row_left += 1
+
+        # Add HCF OP time entry
+        self.add_entry_field(left_frame, row_left, "HCF OP time :", 1, is_uint16=True, default="10", align="w", min_val=1, max_val=999,
+                            tooltip="Thời gian chạy HCF OP (1-999)")
         row_left += 1
 
         # Note: check_box[6] is handled by the checkboxes
@@ -170,10 +194,10 @@ class FlashToolGUI:
             else:
                 bundle_dir = os.path.dirname(os.path.abspath(__file__))
                 
-            qr_path = os.path.join(bundle_dir, "qr_duong.jpg")
+            qr_path = os.path.join(bundle_dir, "qr_a_trung.jpg")
             
             if not os.path.exists(qr_path):
-                raise FileNotFoundError("Không tìm thấy file qr_duong.jpg")
+                raise FileNotFoundError("Không tìm thấy file qr_a_trung.jpg")
                 
             qr_image = Image.open(qr_path)
             qr_image = qr_image.resize((75, 75))
@@ -348,7 +372,38 @@ class FlashToolGUI:
             self.file_path.set(file_path)
             messagebox.showinfo("Success", "Hex file selected")
 
+    def check_connection(self):
+        """Check if device is connected and update status"""
+        if not self.tool_path:
+            messagebox.showerror("Error", "NuLink tool not found")
+            return False
+            
+        command = [self.tool_path, "-p"]
+        info = self.run_command(command)
+        if info:
+            # Extract MCU info after second >>>
+            info_parts = info.split('>>>')
+            if len(info_parts) > 2:
+                mcu_info = ''.join(c for c in info_parts[2] if c.isalnum())[:9]
+                self.connect_status.config(text="Status: Connected", fg="green")
+                self.mcu_info.config(text=f"MCU: {mcu_info}")
+                self.enable_buttons()
+            else:
+                self.connect_status.config(text="Status: Connected", fg="green")
+                self.mcu_info.config(text="")
+                self.enable_buttons()
+            return True
+        else:
+            self.connect_status.config(text="Status: Disconnected", fg="red")
+            self.mcu_info.config(text="")
+            self.disable_buttons()
+            messagebox.showerror("Error", "Device not connected")
+            return False
+
     def save_and_flash(self):
+        if not self.check_connection():
+            return
+            
         hex_file_path = self.file_path.get()
         if not hex_file_path:
             messagebox.showerror("Error", "Please select a HEX file first.")
@@ -362,7 +417,8 @@ class FlashToolGUI:
             # Add init byte = 2 at 0x7F00
             new_data.append(2)
             
-            while current_idx < len(self.eeprom_entries):
+            # Process all entries except HCF OP time
+            while current_idx < len(self.eeprom_entries) - 2:  # Stop before HCF OP time
                 if isinstance(self.eeprom_entries[current_idx], ttk.Combobox):
                     # Convert combo values to numbers
                     value = self.eeprom_entries[current_idx].get()
@@ -372,7 +428,15 @@ class FlashToolGUI:
                         value = 1
                     elif value == "H":
                         value = 0
-                    elif value == "2":  # Special case for On time
+                    elif value == "R1:2 R2:1":
+                        value = 1
+                    elif value == "R1:1 R2:2":
+                        value = 2  
+                    elif value == "R1:2 R2:2":
+                        value = 3
+                    elif value == "R1:1 R2:1":
+                        value = 0
+                    elif value == "2":  # Add mapping for Touch Num
                         value = 1
                     elif value == "1":
                         value = 0
@@ -401,6 +465,14 @@ class FlashToolGUI:
             new_data.append(0)  # uint8_t = 0
             new_data.extend([0, 0, 0, 0])  # uint32_t = 0
             
+            # Add HCF OP time at the very end
+            hcf_time_entry = self.multi_byte_entries[len(self.eeprom_entries) - 2]['entry']
+            value = hcf_time_entry.get().strip()
+            new_data.extend(self.get_entry_bytes(value, 2))
+            
+            # Add 51 bytes of zeros after HCF OP time
+            new_data.extend([0] * 101)
+            
             # Continue with existing hex file handling...
             hex_file = IntelHex(hex_file_path)
             
@@ -415,12 +487,16 @@ class FlashToolGUI:
 
             # Flash the merged file
             if self.tool_path:
-                self.erase_microcontroller()
-                self.reset_microcontroller()
+                self.run_command([self.tool_path, "-e", "ALL"])
+                self.run_command([self.tool_path, "-reset"])
                 command = [self.tool_path, "-w", "APROM", temp_file]
                 result = self.run_command(command)
                 if result:
-                    messagebox.showinfo("Success", "File flashed successfully!")
+                    # Only lock if checkbox checked
+                    if self.lock_chip_var.get():
+                        lock_cmd = [self.tool_path, "-w", "cfg0", "0xFFFFFFFD"] 
+                        self.run_command(lock_cmd)
+                    messagebox.showinfo("Success", "Save & Flash!")
                 
             # Clean up
             if os.path.exists(temp_file):
@@ -433,44 +509,88 @@ class FlashToolGUI:
             messagebox.showerror("Error", f"Failed to merge and flash:\n{e}")
 
     def erase_microcontroller(self):
+        if not self.check_connection():
+            return
+            
         if self.tool_path:
             command = [self.tool_path, "-e", "ALL"]
-            self.run_command(command)
+            if self.run_command(command):
+                messagebox.showinfo("Success", "Erase!")
 
     def reset_microcontroller(self):
+        if not self.check_connection():
+            return
+            
         if self.tool_path:
             command = [self.tool_path, "-reset"]
-            self.run_command(command)
+            if self.run_command(command):
+                messagebox.showinfo("Success", "Reset!")
 
     def flash_microcontroller(self):
-        self.erase_microcontroller()
-        self.reset_microcontroller()
-        hex_file = self.file_path.get()
-        if hex_file and self.tool_path:
-            command = [self.tool_path, "-w", "APROM", hex_file]
-            self.run_command(command)
+        if not self.check_connection():
+            return
+            
+        if self.tool_path:
+            # Erase và reset không hiện thông báo
+            self.run_command([self.tool_path, "-e", "ALL"])
+            self.run_command([self.tool_path, "-reset"])
+            
+            hex_file = self.file_path.get()
+            if hex_file:
+                # Flash
+                flash_cmd = [self.tool_path, "-w", "APROM", hex_file]
+                if self.run_command(flash_cmd):
+                    # Only lock if checkbox checked
+                    if self.lock_chip_var.get():
+                        lock_cmd = [self.tool_path, "-w", "cfg0", "0xFFFFFFFD"]
+                        self.run_command(lock_cmd)
+                    messagebox.showinfo("Success", "Flash!")
 
     def connect_device(self):
         try:
+            if not messagebox.askyesno("Xác nhận", "Bộ nhớ sẽ bị xóa trước khi connect. Bạn có muốn tiếp tục?"):
+                return
+
+            if self.tool_path:
+                command = [self.tool_path, "-e", "ALL"]
+                self.run_command(command)
+
             command = [self.tool_path, "-p"]
             info = self.run_command(command)
             if info:
                 # Extract MCU info after second >>>
                 info_parts = info.split('>>>')
                 if len(info_parts) > 2:
-                    # Get only alphanumeric chars, limit to 9 chars
                     mcu_info = ''.join(c for c in info_parts[2] if c.isalnum())[:9]
                     self.connect_status.config(text="Status: Connected", fg="green")
                     self.mcu_info.config(text=f"MCU: {mcu_info}")
+                    self.enable_buttons()
                 else:
                     self.connect_status.config(text="Status: Connected", fg="green")
                     self.mcu_info.config(text="")
+                    self.enable_buttons()
             else:
                 self.connect_status.config(text="Status: Disconnected", fg="red")
                 self.mcu_info.config(text="")
+                self.disable_buttons()
         except Exception as e:
             self.connect_status.config(text="Status: Disconnected", fg="red")
             self.mcu_info.config(text="")
+            self.disable_buttons()
+
+    def enable_buttons(self):
+        """Enable all control buttons"""
+        self.flash_btn["state"] = "normal"
+        self.erase_btn["state"] = "normal"
+        self.reset_btn["state"] = "normal" 
+        self.save_flash_btn["state"] = "normal"
+
+    def disable_buttons(self):
+        """Disable all control buttons"""
+        self.flash_btn["state"] = "disabled"
+        self.erase_btn["state"] = "disabled"
+        self.reset_btn["state"] = "disabled"
+        self.save_flash_btn["state"] = "disabled"
 
     def get_info(self):
         pass
@@ -493,6 +613,7 @@ class FlashToolGUI:
 
     def generate_hex(self):
         """Generate merged hex file without flashing"""
+        # No connection check needed for generate_hex since it doesn't interact with device
         try:
             save_path = filedialog.asksaveasfilename(
                 defaultextension=".hex",
@@ -513,7 +634,7 @@ class FlashToolGUI:
             new_data.append(2)  # Init byte
             
             # Reuse existing conversion logic
-            while current_idx < len(self.eeprom_entries):
+            while current_idx < len(self.eeprom_entries) - 2:  # Stop before HCF OP time
                 if isinstance(self.eeprom_entries[current_idx], ttk.Combobox):
                     # Convert combo values to numbers
                     value = self.eeprom_entries[current_idx].get()
@@ -523,7 +644,15 @@ class FlashToolGUI:
                         value = 1
                     elif value == "H":
                         value = 0
-                    elif value == "2":  # Special case for On time
+                    elif value == "R1:2 R2:1":
+                        value = 1
+                    elif value == "R1:1 R2:2":
+                        value = 2  
+                    elif value == "R1:2 R2:2":
+                        value = 3
+                    elif value == "R1:1 R2:1":
+                        value = 0
+                    elif value == "2":  # Add mapping for Touch Num
                         value = 1
                     elif value == "1":
                         value = 0
@@ -551,6 +680,14 @@ class FlashToolGUI:
             # Add extra uint8 and uint32 values = 0  
             new_data.append(0)  # uint8_t = 0
             new_data.extend([0, 0, 0, 0])  # uint32_t = 0
+
+            # Add HCF OP time at the very end
+            hcf_time_entry = self.multi_byte_entries[len(self.eeprom_entries) - 2]['entry']
+            value = hcf_time_entry.get().strip()
+            new_data.extend(self.get_entry_bytes(value, 2))
+            
+            # Add 51 bytes of zeros after HCF OP time
+            new_data.extend([0] * 101)
 
             hex_file = IntelHex(hex_file_path)
             for i, value in enumerate(new_data):

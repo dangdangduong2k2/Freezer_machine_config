@@ -7,7 +7,7 @@ pyinstaller --noconfirm ^
             --onefile ^
             --noconsole ^
             --name "FlashTool" ^
-            --add-data "qr_duong.jpg;." ^
+            --add-data "qr_a_trung.jpg;." ^
             --add-data "NuLink_8051OT.exe;." ^
             --clean ^
             app.py
