@@ -13,7 +13,7 @@ class FlashToolGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Microcontroller Flash Tool")
-        self.root.geometry("570x480")  # Increased height for new frame
+        self.root.geometry("570x510")  # Increased height for new frame
         self.root.resizable(False, False)
 
         self.tool_path = self.detect_tool_path()
@@ -158,6 +158,11 @@ class FlashToolGUI:
         self.add_entry_field(right_frame, row_right, "Mode HCF :", 1, is_combo=True, values=["CF", "H"], default="CF", align="w",
                             tooltip="CF: Mode Cold Fast, H: Mode Hot")
         row_right += 1
+        
+        self.add_entry_field(right_frame, row_right, "Mode HDF :", 1, is_combo=True, values=["OFF", "ON"], default="OFF", align="w",
+                            tooltip="ON/OFF: Bật/tắt mode HDF")
+        row_right += 1
+        
         self.add_entry_field(right_frame, row_right, "On time Mode LED :", 1, is_combo=True, 
                            values=["R1:1 R2:1", "R1:2 R2:1", "R1:1 R2:2", "R1:2 R2:2"], 
                            default="R1:1 R2:1", align="w",
@@ -414,33 +419,29 @@ class FlashToolGUI:
             new_data = []
             current_idx = 0
             
-            # Add init byte = 2 at 0x7F00
+            # Add init byte = 2 at 0x7F00 
             new_data.append(2)
             
-            # Process all entries except HCF OP time
-            while current_idx < len(self.eeprom_entries) - 2:  # Stop before HCF OP time
+            # Map in exact order defined in memory map
+            while current_idx < len(self.eeprom_entries):
                 if isinstance(self.eeprom_entries[current_idx], ttk.Combobox):
-                    # Convert combo values to numbers
                     value = self.eeprom_entries[current_idx].get()
-                    if value in ["OP", "LED", "ON"]:  # Normal cases
+                    # Map combo values to numbers based on mode
+                    if value == "CF":  # HCF mode 
                         value = 1
-                    elif value == "CF":  # Special case for HCF mode
-                        value = 1
-                    elif value == "H":
+                    elif value == "H":  # HCF mode
                         value = 0
-                    elif value == "R1:2 R2:1":
+                    elif value in ["OP", "LED", "ON"]:
+                        value = 1
+                    elif value == "R1:2 R2:1": 
                         value = 1
                     elif value == "R1:1 R2:2":
                         value = 2  
                     elif value == "R1:2 R2:2":
                         value = 3
-                    elif value == "R1:1 R2:1":
-                        value = 0
-                    elif value == "2":  # Add mapping for Touch Num
+                    elif value == "2":  # Touch Num
                         value = 1
-                    elif value == "1":
-                        value = 0
-                    else:  # CL, LCD, OFF
+                    else:  # CL, LCD, OFF, "1"
                         value = 0
                     new_data.append(value)
                     current_idx += 1
@@ -456,24 +457,14 @@ class FlashToolGUI:
                         new_data.append(int(value, 16) if value else 0)
                     current_idx += 1
 
-            # Add checkbox values after try time
+            # Add checkbox values first
             for var in self.checkbox_vars:
                 new_data.append(1 if var.get() else 0)
-                current_idx += 1
 
-            # Add extra uint8 and uint32 values = 0
-            new_data.append(0)  # uint8_t = 0
-            new_data.extend([0, 0, 0, 0])  # uint32_t = 0
+            # Then add remaining padding (1 uint8 + 4 uint32 + 101 zero = 106 bytes)
+            new_data.extend([0] * 106)
             
-            # Add HCF OP time at the very end
-            hcf_time_entry = self.multi_byte_entries[len(self.eeprom_entries) - 2]['entry']
-            value = hcf_time_entry.get().strip()
-            new_data.extend(self.get_entry_bytes(value, 2))
-            
-            # Add 51 bytes of zeros after HCF OP time
-            new_data.extend([0] * 101)
-            
-            # Continue with existing hex file handling...
+            # Continue with hex file handling...
             hex_file = IntelHex(hex_file_path)
             
             # Write all data including init byte
@@ -634,29 +625,25 @@ class FlashToolGUI:
             new_data.append(2)  # Init byte
             
             # Reuse existing conversion logic
-            while current_idx < len(self.eeprom_entries) - 2:  # Stop before HCF OP time
+            while current_idx < len(self.eeprom_entries):
                 if isinstance(self.eeprom_entries[current_idx], ttk.Combobox):
-                    # Convert combo values to numbers
                     value = self.eeprom_entries[current_idx].get()
-                    if value in ["OP", "LED", "ON"]:  # Normal cases
+                    # Map combo values to numbers based on mode
+                    if value == "CF":  # HCF mode 
                         value = 1
-                    elif value == "CF":  # Special case for HCF mode
-                        value = 1
-                    elif value == "H":
+                    elif value == "H":  # HCF mode
                         value = 0
-                    elif value == "R1:2 R2:1":
+                    elif value in ["OP", "LED", "ON"]:
+                        value = 1
+                    elif value == "R1:2 R2:1": 
                         value = 1
                     elif value == "R1:1 R2:2":
                         value = 2  
                     elif value == "R1:2 R2:2":
                         value = 3
-                    elif value == "R1:1 R2:1":
-                        value = 0
-                    elif value == "2":  # Add mapping for Touch Num
+                    elif value == "2":  # Touch Num
                         value = 1
-                    elif value == "1":
-                        value = 0
-                    else:  # CL, LCD, OFF
+                    else:  # CL, LCD, OFF, "1"
                         value = 0
                     new_data.append(value)
                     current_idx += 1
@@ -672,22 +659,12 @@ class FlashToolGUI:
                         new_data.append(int(value, 16) if value else 0)
                     current_idx += 1
 
-            # Add checkbox values after try time
+            # Add checkbox values first
             for var in self.checkbox_vars:
                 new_data.append(1 if var.get() else 0)
-                current_idx += 1
-                
-            # Add extra uint8 and uint32 values = 0  
-            new_data.append(0)  # uint8_t = 0
-            new_data.extend([0, 0, 0, 0])  # uint32_t = 0
 
-            # Add HCF OP time at the very end
-            hcf_time_entry = self.multi_byte_entries[len(self.eeprom_entries) - 2]['entry']
-            value = hcf_time_entry.get().strip()
-            new_data.extend(self.get_entry_bytes(value, 2))
-            
-            # Add 51 bytes of zeros after HCF OP time
-            new_data.extend([0] * 101)
+            # Then add remaining padding (1 uint8 + 4 uint32 + 101 zero = 106 bytes)
+            new_data.extend([0] * 106)  
 
             hex_file = IntelHex(hex_file_path)
             for i, value in enumerate(new_data):
