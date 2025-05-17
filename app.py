@@ -13,7 +13,7 @@ class FlashToolGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Microcontroller Flash Tool")
-        self.root.geometry("570x510")  # Increased height for new frame
+        self.root.geometry("570x585")  # Increased height for new frame
         self.root.resizable(False, False)
 
         self.tool_path = self.detect_tool_path()
@@ -146,8 +146,8 @@ class FlashToolGUI:
         row_right += 1
 
         # 4. lock_time through tried_time
-        self.add_entry_field(left_frame, row_left, "Auto lock (Lock time) :", 1, is_uint16=True, default="6", align="w", min_val=1, max_val=999,
-                            tooltip="Thời gian tự động khóa (1-999)")
+        self.add_entry_field(left_frame, row_left, "Auto lock (Lock time) :", 1, is_uint16=True, default="0", align="w", min_val=0, max_val=999,
+                            tooltip="Thời gian tự động khóa (0-999)")
         row_left += 1
         self.add_entry_field(left_frame, row_left, "Độ sáng led xanh :", 1, is_uint8=True, default="0", align="w", min_val=0, max_val=7,
                             tooltip="Điều chỉnh độ sáng LED xanh (0-7)")
@@ -171,8 +171,8 @@ class FlashToolGUI:
         self.add_entry_field(right_frame, row_right, "Touch Num :", 1, is_combo=True, values=["1", "2"], default="1", align="w",
                             tooltip="1: Chạm 1 lần, 2: Chạm 2 lần")
         row_right += 1
-        self.add_entry_field(left_frame, row_left, "Try time :", 1, is_uint16=True, default="1", align="w", min_val=1, max_val=999, has_unit_toggle=True,
-                            tooltip="Thời gian thử (1-999 giờ/ngày)")
+        self.add_entry_field(left_frame, row_left, "Try time :", 1, is_uint16=True, default="0", align="w", min_val=0, max_val=999, has_unit_toggle=True,
+                            tooltip="Thời gian thử (0-999 giờ/ngày)")
         row_left += 1
 
         # Add HCF OP time entry
@@ -214,6 +214,28 @@ class FlashToolGUI:
             
         except Exception as e:
             print(f"Lỗi khi tải QR code: {e}")
+
+        # Add min-max time range frame (8 entries: min1, max1, min2, max2, ...)
+        time_range_frame = ttk.LabelFrame(left_frame, text="Time Ranges (Min/Max)")
+        time_range_frame.grid(row=row_left, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        self.time_range_entries = []  # List of (min_entry, max_entry) tuples
+
+        labels = [
+            "Chạy lạnh CL", "Chạy lạnh OP", "Xả đá CL", "Xả đá OP"
+        ]
+        for i, label in enumerate(labels):
+            tk.Label(time_range_frame, text=f"{label} Min:").grid(row=i, column=0, padx=2, pady=2, sticky="e")
+            min_entry = tk.Entry(time_range_frame, width=5)
+            min_entry.insert(0, "1")
+            min_entry.grid(row=i, column=1, padx=2, pady=2)
+            tk.Label(time_range_frame, text=f"{label} Max:").grid(row=i, column=2, padx=2, pady=2, sticky="e")
+            max_entry = tk.Entry(time_range_frame, width=5)
+            max_entry.insert(0, "999")
+            max_entry.grid(row=i, column=3, padx=2, pady=2)
+            self.time_range_entries.append((min_entry, max_entry))
+
+        row_left += 1
 
     def add_entry_field(self, parent, row, label, display_width=1, column=0, is_uint16=False, 
                        is_uint32=False, is_uint8=False, is_combo=False, values=None, default="0", 
@@ -462,8 +484,15 @@ class FlashToolGUI:
                 new_data.append(1 if var.get() else 0)
 
             # Then add remaining padding (1 uint8 + 4 uint32 + 101 zero = 106 bytes)
-            new_data.extend([0] * 106)
-            
+            new_data.extend([0] * 202)  
+
+            # Map min/max values from the 8 entry fields
+            min_values, max_values = self.get_time_range_values()
+            for value in min_values:
+                new_data.extend([(value >> 8) & 0xFF, value & 0xFF])
+            for value in max_values:
+                new_data.extend([(value >> 8) & 0xFF, value & 0xFF])
+
             # Continue with hex file handling...
             hex_file = IntelHex(hex_file_path)
             
@@ -664,7 +693,19 @@ class FlashToolGUI:
                 new_data.append(1 if var.get() else 0)
 
             # Then add remaining padding (1 uint8 + 4 uint32 + 101 zero = 106 bytes)
-            new_data.extend([0] * 106)  
+            new_data.extend([0] * 202)  
+
+            # Add fixed min-max values for time ranges
+            min_values = [1, 1, 1, 1]  # Min values for CL, OP, CL, OP
+            max_values = [999, 999, 999, 999]  # Max values for CL, OP, CL, OP
+            
+            # Map min values (2 bytes each)
+            for value in min_values:
+                new_data.extend([(value >> 8) & 0xFF, value & 0xFF])
+                
+            # Map max values (2 bytes each)  
+            for value in max_values:
+                new_data.extend([(value >> 8) & 0xFF, value & 0xFF])
 
             hex_file = IntelHex(hex_file_path)
             for i, value in enumerate(new_data):
@@ -676,6 +717,23 @@ class FlashToolGUI:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate hex file:\n{e}")
+
+    def get_time_range_values(self):
+        """Get min-max values from time range entries"""
+        min_values = []
+        max_values = []
+        for min_entry, max_entry in self.time_range_entries:
+            try:
+                min_val = int(min_entry.get())
+                max_val = int(max_entry.get())
+                min_val = max(1, min(min_val, 999))
+                max_val = max(1, min(max_val, 999))
+                min_values.append(min_val)
+                max_values.append(max_val)
+            except ValueError:
+                min_values.append(1)
+                max_values.append(999)
+        return min_values, max_values
 
 if __name__ == "__main__":
     root = tk.Tk()
